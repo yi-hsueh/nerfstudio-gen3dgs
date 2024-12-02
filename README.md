@@ -1,3 +1,8 @@
+### This is a fork of [Nerfstudio](https://github.com/nerfstudio-project/nerfstudio).
+This repository is customized for 3DGS research.
+
+---
+
 <p align="center">
     <!-- community badges -->
     <a href="https://discord.gg/uMbNqcraFc"><img src="https://dcbadge.vercel.app/api/server/uMbNqcraFc?style=plastic"/></a>
