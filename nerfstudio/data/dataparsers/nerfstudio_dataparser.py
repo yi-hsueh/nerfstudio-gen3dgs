@@ -30,7 +30,8 @@ from nerfstudio.data.scene_box import SceneBox
 from nerfstudio.data.utils.dataparsers_utils import (
     get_train_eval_split_all,
     get_train_eval_split_filename,
-    get_train_eval_split_fraction,
+    get_train_eval_split_fraction, # not used
+    get_train_eval_split_fraction_random,
     get_train_eval_split_interval,
 )
 from nerfstudio.utils.io import load_from_json
@@ -67,7 +68,7 @@ class NerfstudioDataParserConfig(DataParserConfig):
     Interval uses every nth frame for eval.
     All uses all the images for any split.
     """
-    train_split_fraction: float = 0.9
+    train_split_fraction: float = 0.9 # original: 0.9
     """The percentage of the dataset to use for training. Only used when eval_mode is train-split-fraction."""
     eval_interval: int = 8
     """The interval between frames to use for eval. Only used when eval_mode is eval-interval."""
@@ -207,7 +208,8 @@ class Nerfstudio(DataParser):
         else:
             # find train and eval indices based on the eval_mode specified
             if self.config.eval_mode == "fraction":
-                i_train, i_eval = get_train_eval_split_fraction(image_filenames, self.config.train_split_fraction)
+                #i_train, i_eval = get_train_eval_split_fraction(image_filenames, self.config.train_split_fraction) # original evenly split function
+                i_train, i_eval = get_train_eval_split_fraction_random(image_filenames, self.config.train_split_fraction) # randomly split function
             elif self.config.eval_mode == "filename":
                 i_train, i_eval = get_train_eval_split_filename(image_filenames)
             elif self.config.eval_mode == "interval":
