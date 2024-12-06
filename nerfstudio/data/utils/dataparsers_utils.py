@@ -32,7 +32,7 @@ def get_train_eval_split_fraction_random(image_filenames: List, train_split_frac
     if seed is not None:
         np.random.seed(seed)  # Set random seed for reproducibility
     else:
-        print("Arbitrary random seed for splitting dataset generated!")
+        print('\033[91m' + "Arbitrary random seed for splitting dataset generated!" + '\033[0m')
 
     num_images = len(image_filenames)
     num_train_images = math.ceil(num_images * train_split_fraction)

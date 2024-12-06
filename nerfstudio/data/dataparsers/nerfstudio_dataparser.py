@@ -209,7 +209,7 @@ class Nerfstudio(DataParser):
             # find train and eval indices based on the eval_mode specified
             if self.config.eval_mode == "fraction":
                 #i_train, i_eval = get_train_eval_split_fraction(image_filenames, self.config.train_split_fraction) # original evenly split function
-                i_train, i_eval = get_train_eval_split_fraction_random(image_filenames, self.config.train_split_fraction) # randomly split function
+                i_train, i_eval = get_train_eval_split_fraction_random(image_filenames, self.config.train_split_fraction, 42) # randomly split function
             elif self.config.eval_mode == "filename":
                 i_train, i_eval = get_train_eval_split_filename(image_filenames)
             elif self.config.eval_mode == "interval":
