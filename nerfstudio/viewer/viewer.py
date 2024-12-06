@@ -108,7 +108,7 @@ class Viewer:
         )
         self._prev_train_state: Literal["training", "paused", "completed"] = self.train_btn_state
         self.last_move_time = 0
-        # track the camera index that last being clicked
+        # track the camera index that last being clicked (Only training cameras are considered)
         self.current_camera_idx = 0
 
         self.viser_server = viser.ViserServer(host=config.websocket_host, port=websocket_port)
@@ -182,17 +182,33 @@ class Viewer:
             self.pause_train.visible = False
 
         # Add buttons to toggle training image visibility
-        self.hide_images = self.viser_server.gui.add_button(
+        self.hide_train_images = self.viser_server.gui.add_button(
             label="Hide Train Cams", disabled=False, icon=viser.Icon.EYE_OFF, color=None
         )
-        self.hide_images.on_click(lambda _: self.set_camera_visibility(False))
-        self.hide_images.on_click(lambda _: self.toggle_cameravis_button())
-        self.show_images = self.viser_server.gui.add_button(
+        self.hide_train_images.on_click(lambda _: self.set_train_camera_visibility(False))
+        self.hide_train_images.on_click(lambda _: self.toggle_train_cameravis_button())
+        
+        self.show_train_images = self.viser_server.gui.add_button(
             label="Show Train Cams", disabled=False, icon=viser.Icon.EYE, color=None
         )
-        self.show_images.on_click(lambda _: self.set_camera_visibility(True))
-        self.show_images.on_click(lambda _: self.toggle_cameravis_button())
-        self.show_images.visible = False
+        self.show_train_images.on_click(lambda _: self.set_train_camera_visibility(True))
+        self.show_train_images.on_click(lambda _: self.toggle_train_cameravis_button())
+        self.show_train_images.visible = False
+
+        # Add buttons to toggle testing image visibility
+        self.hide_test_images = self.viser_server.gui.add_button(
+            label="Hide Test Cams", disabled=False, icon=viser.Icon.EYE_OFF, color=None
+        )
+        self.hide_test_images.on_click(lambda _: self.set_test_camera_visibility(False))
+        self.hide_test_images.on_click(lambda _: self.toggle_test_cameravis_button())
+
+        self.show_test_images = self.viser_server.gui.add_button(
+            label="Show Test Cams", disabled=False, icon=viser.Icon.EYE, color=None
+        )
+        self.show_test_images.on_click(lambda _: self.set_test_camera_visibility(True))
+        self.show_test_images.on_click(lambda _: self.toggle_test_cameravis_button())
+        self.show_test_images.visible = False
+        
         mkdown = self.make_stats_markdown(0, "0x0px")
         self.stats_markdown = self.viser_server.gui.add_markdown(mkdown)
         tabs = self.viser_server.gui.add_tab_group()
@@ -294,9 +310,13 @@ class Viewer:
         self.pause_train.visible = not self.pause_train.visible
         self.resume_train.visible = not self.resume_train.visible
 
-    def toggle_cameravis_button(self) -> None:
-        self.hide_images.visible = not self.hide_images.visible
-        self.show_images.visible = not self.show_images.visible
+    def toggle_train_cameravis_button(self) -> None:
+        self.hide_train_images.visible = not self.hide_train_images.visible
+        self.show_train_images.visible = not self.show_train_images.visible
+
+    def toggle_test_cameravis_button(self) -> None:
+        self.hide_test_images.visible = not self.hide_test_images.visible
+        self.show_test_images.visible = not self.show_test_images.visible
 
     def make_stats_markdown(self, step: Optional[int], res: Optional[str]) -> str:
         # if either are None, read it from the current stats_markdown content
@@ -362,11 +382,17 @@ class Viewer:
                 camera_state = self.get_camera_state(client)
                 self.render_statemachines[client.client_id].action(RenderAction("move", camera_state))
 
-    def set_camera_visibility(self, visible: bool) -> None:
+    def set_train_camera_visibility(self, visible: bool) -> None:
         """Toggle the visibility of the training cameras."""
         with self.viser_server.atomic():
             for idx in self.camera_handles:
                 self.camera_handles[idx].visible = visible
+
+    def set_test_camera_visibility(self, visible: bool) -> None:
+        """Toggle the visibility of the testing cameras."""
+        with self.viser_server.atomic():
+            for idx in self.test_camera_handles:
+                self.test_camera_handles[idx].visible = visible
 
     def update_camera_poses(self):
         # TODO this fn accounts for like ~5% of total train time
@@ -470,6 +496,7 @@ class Viewer:
                 image=image_uint8,
                 wxyz=R.wxyz,
                 position=c2w[:3, 3] * VISER_NERFSTUDIO_SCALE_RATIO,
+                color=(0, 255, 0),
             )
 
             def create_on_click_callback(capture_idx):
@@ -485,9 +512,46 @@ class Viewer:
 
             self.camera_handles[idx] = camera_handle
             self.original_c2w[idx] = c2w
+        
+        # Draw testing cameras if eval_dataset is provided
+        self.test_camera_handles: Dict[int, viser.CameraFrustumHandle] = {}
+        if eval_dataset is not None:
+            test_indices = self._pick_drawn_image_idxs(len(eval_dataset))
+            for idx in test_indices:
+                image = eval_dataset[idx]["image"]
+                camera = eval_dataset.cameras[idx]
+                image_uint8 = (image * 255).detach().type(torch.uint8) # scaled to [0, 255]
+                image_uint8 = image_uint8.permute(2, 0, 1)
+                image_uint8 = torchvision.transforms.functional.resize(image_uint8, 100, antialias=None)
+                image_uint8 = image_uint8.permute(1, 2, 0)
+                image_uint8 = image_uint8.cpu().numpy()
+                c2w = camera.camera_to_worlds.cpu().numpy()
+                R = vtf.SO3.from_matrix(c2w[:3, :3]) # Extract rotation matrix
+                R = R @ vtf.SO3.from_x_radians(np.pi) # Adjust orientation 
+                test_camera_handle = self.viser_server.scene.add_camera_frustum(
+                    name=f"/cameras/test_camera_{idx:05d}",
+                    fov=float(2 * np.arctan((camera.cx / camera.fx[0]).cpu())),
+                    scale=self.config.camera_frustum_scale,
+                    aspect=float((camera.cx[0] / camera.cy[0]).cpu()),
+                    image=image_uint8,
+                    wxyz=R.wxyz,
+                    position=c2w[:3, 3] * VISER_NERFSTUDIO_SCALE_RATIO,
+                    color=(255, 0, 0),
+                )
+
+                def create_on_click_callback_test():
+                    def on_click_callback_test(event: viser.SceneNodePointerEvent[viser.CameraFrustumHandle]) -> None:
+                        with event.client.atomic():
+                            event.client.camera.position = event.target.position
+                            event.client.camera.wxyz = event.target.wxyz
+                    return on_click_callback_test
+                    
+                test_camera_handle.on_click(create_on_click_callback_test())
+                
+                self.test_camera_handles[idx] = test_camera_handle
 
         self.train_state = train_state
-        self.train_util = 0.9
+        self.train_util = 0.9 # Allocate 90% of the system's computational time to training; 10% to rendering
 
     def update_scene(self, step: int, num_rays_per_batch: Optional[int] = None) -> None:
         """updates the scene based on the graph weights
