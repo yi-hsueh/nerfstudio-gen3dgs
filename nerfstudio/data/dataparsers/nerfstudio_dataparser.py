@@ -31,7 +31,9 @@ from nerfstudio.data.utils.dataparsers_utils import (
     get_train_eval_split_all,
     get_train_eval_split_filename,
     get_train_eval_split_fraction, # not used
-    get_train_eval_split_fraction_random,
+    get_train_eval_split_fraction_random, # added
+    get_train_eval_split_indices, # added
+    get_train_eval_split_sparse, # added
     get_train_eval_split_interval,
 )
 from nerfstudio.utils.io import load_from_json
@@ -60,10 +62,12 @@ class NerfstudioDataParserConfig(DataParserConfig):
     """The method to use to center the poses."""
     auto_scale_poses: bool = True
     """Whether to automatically scale the poses to fit in +/- 1 bounding box."""
-    eval_mode: Literal["fraction", "filename", "interval", "all"] = "fraction"
+    eval_mode: Literal["fraction", "random", "index", "sparse", "filename", "interval", "all"] = "sparse" #"fraction"
     """
     The method to use for splitting the dataset into train and eval.
     Fraction splits based on a percentage for train and the remaining for eval.
+    Index splits based on a list of indices in a split.json file.
+    Sparse splits based on N views for training and the remaining views for evaluation.
     Filename splits based on filenames containing train/eval.
     Interval uses every nth frame for eval.
     All uses all the images for any split.
@@ -207,9 +211,16 @@ class Nerfstudio(DataParser):
             raise RuntimeError(f"The dataset's list of filenames for split {split} is missing.")
         else:
             # find train and eval indices based on the eval_mode specified
+            print(f"Split: {split}")
+            print(f"Eval mode: {self.config.eval_mode}")
             if self.config.eval_mode == "fraction":
-                #i_train, i_eval = get_train_eval_split_fraction(image_filenames, self.config.train_split_fraction) # original evenly split function
-                i_train, i_eval = get_train_eval_split_fraction_random(image_filenames, self.config.train_split_fraction, 42) # randomly split function
+                i_train, i_eval = get_train_eval_split_fraction(image_filenames, self.config.train_split_fraction) # original evenly split function
+            elif self.config.eval_mode == "random": # added
+                i_train, i_eval = get_train_eval_split_fraction_random(image_filenames, self.config.train_split_fraction, 42)
+            elif self.config.eval_mode == "index": # added
+                i_train, i_eval = get_train_eval_split_indices(image_filenames)
+            elif self.config.eval_mode == "sparse": # added
+                i_train, i_eval = get_train_eval_split_sparse(image_filenames, 6)
             elif self.config.eval_mode == "filename":
                 i_train, i_eval = get_train_eval_split_filename(image_filenames)
             elif self.config.eval_mode == "interval":
@@ -221,6 +232,12 @@ class Nerfstudio(DataParser):
                 i_train, i_eval = get_train_eval_split_all(image_filenames)
             else:
                 raise ValueError(f"Unknown eval mode {self.config.eval_mode}")
+
+            # print number of images in train and eval
+            num_train_images = len(i_train)
+            num_eval_images = len(i_eval)
+            print(f"Number of training images: {num_train_images}")
+            print(f"Number of evaluation images: {num_eval_images}")
 
             if split == "train":
                 indices = i_train

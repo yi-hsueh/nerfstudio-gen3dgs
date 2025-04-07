@@ -482,7 +482,7 @@ class Viewer:
             # torchvision can be slow to import, so we do it lazily.
             import torchvision
 
-            image_uint8 = torchvision.transforms.functional.resize(image_uint8, 100, antialias=None)  # type: ignore
+            image_uint8 = torchvision.transforms.functional.resize(image_uint8, 512, antialias=None)  # type: ignore
             image_uint8 = image_uint8.permute(1, 2, 0)
             image_uint8 = image_uint8.cpu().numpy()
             c2w = camera.camera_to_worlds.cpu().numpy()
@@ -522,7 +522,7 @@ class Viewer:
                 camera = eval_dataset.cameras[idx]
                 image_uint8 = (image * 255).detach().type(torch.uint8) # scaled to [0, 255]
                 image_uint8 = image_uint8.permute(2, 0, 1)
-                image_uint8 = torchvision.transforms.functional.resize(image_uint8, 100, antialias=None)
+                image_uint8 = torchvision.transforms.functional.resize(image_uint8, 512, antialias=None)
                 image_uint8 = image_uint8.permute(1, 2, 0)
                 image_uint8 = image_uint8.cpu().numpy()
                 c2w = camera.camera_to_worlds.cpu().numpy()

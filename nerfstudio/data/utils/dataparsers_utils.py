@@ -15,9 +15,107 @@
 
 import math
 import os
+import json
 from typing import List, Tuple
 
 import numpy as np
+
+def get_train_eval_split_sparse(image_filenames: List, N_sparse: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Get the train/eval split based on N views for training and the remaining views for evaluation.
+    This follows the approach of the 3DGS-Enhancer(NIPS 2024) paper
+
+    Args:
+        image_filenames: list of image filenames
+        N_sparse: number of images to use for training
+    """
+    
+    # test if image_filenames is sorted
+    assert all(image_filenames[i] <= image_filenames[i + 1] for i in range(len(image_filenames) - 1)), "image_filenames should be sorted"
+
+    '''    
+    #Steps:
+    Test Views: From the sorted camera list, every 8th view is selected as a test view
+    Input Views: The remaining views are sub-sampled using np.linspace to deterministically select exactly N input views
+    '''
+    num_images = len(image_filenames)
+    i_all = np.arange(num_images)
+    i_test_for_3DGSEnhancer = i_all[i_all % 8 == 0] # every 8th view is selected as a test view
+    i_train_candidates = i_all[i_all % 8 != 0] # exclude every 8th view, which are originally used as eval views, but we will use all remaining views as eval views
+    # select N_sparse views from the remaining views
+    idx_train = np.linspace(0, len(i_train_candidates) - 1, N_sparse)
+    idx_train = [round(i) for i in idx_train]
+    i_train = i_train_candidates[idx_train]
+    i_eval = np.setdiff1d(i_all, i_train)  # Remaining indices for evaluation
+    assert len(i_train) == N_sparse
+
+    print(f"Split dataset into {N_sparse} training and {num_images - N_sparse} evaluation images.")
+
+    # store to JSON file
+    parent_dir = os.path.dirname(os.path.dirname(image_filenames[0]))
+    split_file = os.path.join(parent_dir, f"split_{str(N_sparse)}_sparse.json")
+    split_data = {"train": i_train.tolist(), "eval": i_eval.tolist(), "3DGS_Enhancer_Test": i_test_for_3DGSEnhancer.tolist()}
+    with open(split_file, "w") as f:
+        json.dump(split_data, f, indent=4)
+    print(f"Saved train/eval split to {split_file}")
+
+    return i_train, i_eval
+
+
+def get_train_eval_split_indices(image_filenames: List) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Get the train/eval split based on the split.json file.
+    e.g. split.json file contains:
+    {
+        "train": [0, 1, 3, 5, 7, 9],
+        "eval": [2, 4, 6, 8]
+    }
+    if "eval": [-1] is used, then the eval set will be all the images not in the train set.
+
+    Args:
+        image_filenames: list of image filenames
+    """
+
+    # test if image_filenames is sorted
+    assert all(image_filenames[i] <= image_filenames[i + 1] for i in range(len(image_filenames) - 1)), "image_filenames should be sorted"
+    
+    # Load the split.json file
+    parent_dir = os.path.dirname(os.path.dirname(image_filenames[0]))
+    split_file = os.path.join(parent_dir, "split.json")
+    if not os.path.exists(split_file):
+        raise FileNotFoundError(f"split.json file not found at {split_file}")
+    
+    with open(split_file, "r") as f:
+        split_data = json.load(f)
+    
+    num_images = len(image_filenames)
+    i_all = np.arange(num_images)
+    
+    # Get train indices from the JSON file; raise an error if not provided.
+    train_indices = split_data.get("train")
+    if train_indices is None:
+        raise ValueError("split.json must contain a 'train' key")
+    
+    # Get eval indices; if eval is set to [-1], use the complement of train_indices.
+    eval_indices = split_data.get("eval", [])
+    if eval_indices == [-1]:
+        eval_indices = list(set(i_all) - set(train_indices))
+        eval_indices.sort()  # maintain sorted order
+    # Otherwise, use the provided eval indices directly.
+    
+    # Convert the indices lists to numpy arrays
+    i_train = np.array(train_indices)
+    i_eval = np.array(eval_indices)
+    
+    # Optional: validate that the indices are within the valid range.
+    if not all(0 <= idx < num_images for idx in i_train):
+        raise ValueError("Some train indices are out of bounds")
+    if not all(0 <= idx < num_images for idx in i_eval):
+        raise ValueError("Some eval indices are out of bounds")
+
+    print(f"Loaded train/eval split from {split_file}")
+    
+    return i_train, i_eval
 
 
 def get_train_eval_split_fraction_random(image_filenames: List, train_split_fraction: float, seed: int = None) -> Tuple[np.ndarray, np.ndarray]:
@@ -43,6 +141,8 @@ def get_train_eval_split_fraction_random(image_filenames: List, train_split_frac
     i_train = np.random.choice(i_all, size=num_train_images, replace=False)
     i_eval = np.setdiff1d(i_all, i_train)  # Remaining indices for evaluation
     assert len(i_eval) == num_eval_images
+
+    print(f"Randomly split dataset into {num_train_images} training and {num_eval_images} evaluation images.", f" Random seed: {seed}" if seed is not None else "")
 
     return i_train, i_eval
 

@@ -427,6 +427,9 @@ def colmap_to_json(
     else:  # one camera for all frames
         out = parse_colmap_camera_params(cam_id_to_camera[1])
 
+
+    first_iter = True # print first iteration to debug
+
     frames = []
     for im_id, im_data in im_id_to_image.items():
         # NB: COLMAP uses Eigen / scalar-first quaternions
@@ -439,14 +442,40 @@ def colmap_to_json(
         rotation = qvec2rotmat(im_data.qvec)
 
         translation = im_data.tvec.reshape(3, 1)
+
+        if first_iter:
+            print(f"rotation:\n{rotation}")
+            print(f"translation:\n{translation}")
+            
         w2c = np.concatenate([rotation, translation], 1)
+        if first_iter:
+            print(f"w2c:\n{w2c}")
         w2c = np.concatenate([w2c, np.array([[0, 0, 0, 1]])], 0)
+        if first_iter:
+            print(f"w2c(concatenated [0 0 0 1]):\n{w2c}")
         c2w = np.linalg.inv(w2c)
+        if first_iter:
+            print(f"c2w:\n{c2w}")
+        
         # Convert from COLMAP's camera coordinate system (OpenCV) to ours (OpenGL)
         c2w[0:3, 1:3] *= -1
+        if first_iter: 
+            print(f"c2w after conversion (OpenCV->OpenGL):\n{c2w}")
+
+
+        # Added by me (Still don't know why) # cases that need this: stump, floating-tree,
+        c2w = c2w[np.array([1, 0, 2, 3]), :]
+        c2w[2, :] *= -1
+        if first_iter: 
+            print('\033[91m' + "WARNNING: Additional ad-hoc fix for c2w is applied! Check if this is correct!" + '\033[0m')
+
+
         if not keep_original_world_coordinate:
             c2w = c2w[np.array([0, 2, 1, 3]), :]
             c2w[2, :] *= -1
+
+        if first_iter:
+            print(f"c2w after reordering and z-flip(if keep_coordinate=False):\n{c2w}")
 
         name = im_data.name
         if image_rename_map is not None:
@@ -469,6 +498,8 @@ def colmap_to_json(
 
         frames.append(frame)
 
+        first_iter = False ####
+
     out["frames"] = frames
 
     applied_transform = None
@@ -476,6 +507,9 @@ def colmap_to_json(
         applied_transform = np.eye(4)[:3, :]
         applied_transform = applied_transform[np.array([0, 2, 1]), :]
         applied_transform[2, :] *= -1
+        if first_iter:
+            print(f"applied_transform: {applied_transform}")
+
         out["applied_transform"] = applied_transform.tolist()
 
     # create ply from colmap
