@@ -62,7 +62,7 @@ class NerfstudioDataParserConfig(DataParserConfig):
     """The method to use to center the poses."""
     auto_scale_poses: bool = True
     """Whether to automatically scale the poses to fit in +/- 1 bounding box."""
-    eval_mode: Literal["fraction", "random", "index", "sparse", "filename", "interval", "all"] = "sparse" #"fraction"
+    eval_mode: Literal["fraction", "random", "index", "sparse", "filename", "interval", "all"] = "index" #"fraction"
     """
     The method to use for splitting the dataset into train and eval.
     Fraction splits based on a percentage for train and the remaining for eval.
