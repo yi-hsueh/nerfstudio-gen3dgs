@@ -64,7 +64,10 @@ dependencies = [
     "xatlas",
     "trimesh>=3.20.2",
     "timm==0.6.7",
-    "gsplat==1.4.0",
+    
+    # we installed pre-compiled version of this earlier to avoid compiling error
+    # "gsplat==1.4.0",
+    
     "pytorch-msssim",
     "pathos",
     "packaging",
