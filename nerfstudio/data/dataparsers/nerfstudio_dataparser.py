@@ -377,9 +377,13 @@ class Nerfstudio(DataParser):
 
                 # check if user wants to make a point cloud from colmap points
                 if not self.prompted_user:
-                    self.create_pc = Confirm.ask(
-                        "load_3D_points is true, but the dataset was processed with an outdated ns-process-data that didn't convert colmap points to .ply! Update the colmap dataset automatically?"
-                    )
+                    # self.create_pc = Confirm.ask(
+                    #     "load_3D_points is true, but the dataset was processed with an outdated ns-process-data that didn't convert colmap points to .ply! Update the colmap dataset automatically?"
+                    # )
+                    
+                    # Auto-confirm for now
+                    print("Auto-confirm: Generating sparse point cloud from COLMAP...")
+                    self.create_pc = True
 
                 if self.create_pc:
                     import json
